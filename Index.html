@@ -130,13 +130,13 @@
 </style>
 </head>
 <body>
-<div class="app" id="app">กำลังโหลดข้อมูล...</div>
+<div class="app" id="app">กำลังโหลดข้อมูลจากฐานข้อมูล Cloud...</div>
 <div class="toast" id="toast"></div>
 
 <script>
 // ==================== SUPABASE CONFIGURATION ====================
-const SUPABASE_URL = "https://xypzufiofqpvsjinhldv.supabase.co"; // เปลี่ยนเป็นของคุณ
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cHp1ZmlvZnFwdnNqaW5obGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDY1NzUsImV4cCI6MjA5NTUyMjU3NX0.DHu2lFQq37bgb6Mjb_TD2vibNaOdDNZNV2HsDRJhQJw"; // เปลี่ยนเป็นของคุณ
+const SUPABASE_URL = "https://xypzufiofqpvsjinhldv.supabase.co"; // ⚠️ เปลี่ยนเป็น URL ของคุณ
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cHp1ZmlvZnFwdnNqaW5obGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDY1NzUsImV4cCI6MjA5NTUyMjU3NX0.DHu2lFQq37bgb6Mjb_TD2vibNaOdDNZNV2HsDRJhQJw"; // ⚠️ เปลี่ยนเป็น Public Anon Key ของคุณ
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==================== GLOBAL STATE ====================
@@ -146,19 +146,33 @@ let selectedMachine = null;
 let activeTab = "history";
 let pendingFiles = [];
 
-// ==================== DATA LOADER FROM CLOUD ====================
+// ==================== DATA LOADER FROM CLOUD (WITH AUTO-ALERT) ====================
 async function loadData() {
   try {
+    console.log("กำลังเริ่มเชื่อมต่อฐานข้อมูล Supabase...");
+    
+    // ดึงข้อมูลจาก 3 ตารางพร้อมกัน
     const [groupsRes, machinesRes, repairsRes] = await Promise.all([
       supabase.from('groups').select('*'),
       supabase.from('machines').select('*').order('id', { ascending: true }),
       supabase.from('repairs').select('*').order('date', { ascending: false })
     ]);
 
-    if (groupsRes.error) throw groupsRes.error;
-    if (machinesRes.error) throw machinesRes.error;
-    if (repairsRes.error) throw repairsRes.error;
+    // ตรวจสอบ Error ของแต่ละตารางอย่างละเอียด
+    if (groupsRes.error) { 
+      alert("❌ เกิดข้อผิดพลาดที่ตาราง [groups]:\n" + groupsRes.error.message + "\n\nคำแนะนำ: ตรวจสอบการสะกดชื่อตาราง หรือปิดการใช้งาน RLS"); 
+      return; 
+    }
+    if (machinesRes.error) { 
+      alert("❌ เกิดข้อผิดพลาดที่ตาราง [machines]:\n" + machinesRes.error.message + "\n\nคำแนะนำ: ตรวจสอบโครงสร้างคอลัมน์ หรือปิดการใช้งาน RLS"); 
+      return; 
+    }
+    if (repairsRes.error) { 
+      alert("❌ เกิดข้อผิดพลาดที่ตาราง [repairs]:\n" + repairsRes.error.message + "\n\nคำแนะนำ: ตรวจสอบโครงสร้างคอลัมน์ หรือปิดการใช้งาน RLS"); 
+      return; 
+    }
 
+    // แปลงโครงสร้างข้อมูลเข้าสู่ตัวแปรของระบบหน้าบ้าน (Frontend)
     DB.groups = groupsRes.data;
     DB.machines = machinesRes.data.map(m => ({
       id: m.id, name: m.name, desc: m.desc_text, icon: m.icon, group: m.group_id,
@@ -170,10 +184,11 @@ async function loadData() {
       symptom: r.symptom, fix: r.fix, parts: r.parts, status: r.status, files: r.files || []
     }));
 
+    console.log("โหลดข้อมูลสำเร็จ! ระบบกำลังเรนเดอร์หน้าจอ...");
     updateUI(); 
   } catch (error) {
     console.error("Error fetching Supabase data:", error.message);
-    showToast("⚠️ โหลดข้อมูลจาก Cloud ล้มเหลว");
+    alert("⚠️ ไม่สามารถเชื่อมต่อระบบ Cloud ได้:\n" + error.message + "\n\nคำแนะนำ: ตรวจสอบ URL และ Key ของ Supabase ในโค้ดบรรทัดที่ 103-104");
   }
 }
 
@@ -195,7 +210,7 @@ async function savePmSettings(machineId) {
     await loadData();
     navigate('notifications', null);
   } catch (error) {
-    alert("เกิดข้อผิดพลาด: " + error.message);
+    alert("เกิดข้อผิดพลาดในการบันทึก PM: " + error.message);
   }
 }
 
@@ -233,7 +248,7 @@ async function submitRepairForm() {
     await loadData();
     navigate('machine', machineId);
   } catch (error) {
-    alert("บันทึกข้อมูลล้มเหลว: " + error.message);
+    alert("บันทึกประวัติล้มเหลว: " + error.message);
   }
 }
 
@@ -324,7 +339,7 @@ function downloadQR(id) {
 // ==================== VIEWS RENDERING ====================
 function renderList() {
   const total = DB.machines.length;
-  const currentYearMonth = new Date().toISOString().substring(0,7); // ดึงค่าปี-เดือน ปัจจุบันอัตโนมัติ
+  const currentYearMonth = new Date().toISOString().substring(0,7); 
   const thisMonth = DB.repairs.filter(r => r.date && r.date.startsWith(currentYearMonth)).length;
   const pendingRepair = DB.repairs.filter(r => r.status === "wait").length;
   const alerts = getAllAlerts();
@@ -644,3 +659,92 @@ function renderAdd(machineId) {
           <label class="form-label">ประเภทงาน *</label>
           <select class="form-control" id="f-type" onchange="togglePmUpdate(this.value)">
             <option>ฉุกเฉิน</option>
+            <option>ซ่อมบำรุง</option>
+            <option>PM</option>
+            <option>ปรับปรุง</option>
+          </select>
+        </div>
+      </div>
+      <div id="pm-update-row" style="display:none;" class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="f-update-pm" checked>
+          <span>อัปเดตวันทำ PM ล่าสุดของเครื่องนี้โดยอัตโนมัติ</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อช่างผู้ดำเนินการ *</label>
+        <input type="text" class="form-control" id="f-tech" placeholder="ชื่อ-นามสกุล">
+      </div>
+      <div class="form-group">
+        <label class="form-label">อาการที่พบ / รายละเอียดงาน *</label>
+        <textarea class="form-control" id="f-symptom" placeholder="อธิบายอาการ หรือรายละเอียดงานที่ทำ..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">วิธีแก้ไข / การดำเนินการ</label>
+        <textarea class="form-control" id="f-fix" placeholder="ขั้นตอนและวิธีการที่ดำเนินการ..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">รายการอะไหล่ที่ใช้</label>
+        <input type="text" class="form-control" id="f-parts" placeholder="เช่น V-belt A42 × 1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">สถานะ</label>
+        <select class="form-control" id="f-status">
+          <option value="done">เสร็จแล้ว</option>
+          <option value="wait">รอดำเนินการ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">แนบรูปภาพ / เอกสาร</label>
+        <div class="upload-area" onclick="document.getElementById('f-files').click()">
+          📎 แตะเพื่อเลือกไฟล์ (รูปภาพ, PDF)
+          <input type="file" id="f-files" multiple accept="image/*,.pdf" style="display:none" onchange="handleFiles(this)">
+        </div>
+        <div class="file-list" id="file-list"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="submitRepairForm()">
+        ✓ บันทึกข้อมูลลงระบบ
+      </button>
+    </div>
+  `;
+}
+
+// ==================== APPLICATION LIFECYCLE ====================
+function updateUI() {
+  const app = document.getElementById("app");
+  if (currentView === "list") app.innerHTML = renderList();
+  else if (currentView === "machine") app.innerHTML = renderMachine(selectedMachine);
+  else if (currentView === "add") app.innerHTML = renderAdd(selectedMachine);
+  else if (currentView === "pm-settings") app.innerHTML = renderPmSettings(selectedMachine);
+  else if (currentView === "notifications") app.innerHTML = renderNotifications();
+  
+  if (currentView === "machine" && activeTab === "qr") {
+    const pageUrl = `${location.origin}${location.pathname}?m=${selectedMachine}`;
+    QRCode.toCanvas(document.getElementById('qr-canvas'), pageUrl, { width: 180, margin: 2 });
+  }
+}
+
+function navigate(view, machineId) {
+  currentView = view;
+  selectedMachine = machineId;
+  if (view === 'machine') activeTab = 'history';
+  updateUI();
+}
+
+function setTab(tab) {
+  activeTab = tab;
+  updateUI();
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const mId = urlParams.get('m');
+  if (mId) {
+    currentView = "machine";
+    selectedMachine = mId;
+  }
+  loadData();
+});
+</script>
+</body>
+</html>
