@@ -91,35 +91,35 @@
     </div>
 
     <script>
-        // ⚠️ แทนที่ข้อมูลตรงนี้ด้วย URL และ Anon Key ที่ได้มาจากโปรเจกต์ Supabase ของคุณ
+        // ⚠️ เปลี่ยนข้อมูล 2 บรรทัดนี้ให้เป็นของโปรเจกต์คุณครับ
         const SUPABASE_URL = "https://xypzufiofqpvsjinhldv.supabase.co"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cHp1ZmlvZnFwdnNqaW5obGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDY1NzUsImV4cCI6MjA5NTUyMjU3NX0.DHu2lFQq37bgb6Mjb_TD2vibNaOdDNZNV2HsDRJhQJw";
         
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // แก้ไขปัญหารหัสซ้ำโดยเปลี่ยนชื่อตัวแปรระบบเป็น dbClient
+        const dbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // ฟังก์ชันดึงข้อมูลจากฐานข้อมูลมาแสดงบนตาราง
+        // ฟังก์ชันดึงข้อมูลจากฐานข้อมูล
         async function fetchMachines() {
             document.getElementById('db-status').innerText = "กำลังดึงข้อมูล...";
             
-            // ดึงข้อมูลทั้งหมดจากตารางชื่อ machines
-            let { data: machines, error } = await supabaseClient.from('machines').select('*');
+            // ดึงข้อมูลจากตาราง machines
+            let { data: machines, error } = await dbClient.from('machines').select('*');
             
             if (error) {
-                console.error(error);
-                document.getElementById('db-status').innerText = "🔴 เชื่อมต่อผิดพลาด";
+                console.error("ดึงข้อมูลไม่สำเร็จ:", error);
+                document.getElementById('db-status').innerText = "🔴 ดึงข้อมูลผิดพลาด (เช็คชื่อตารางหรือ RLS)";
                 return;
             }
 
             document.getElementById('db-status').innerText = "🟢 เชื่อมต่อฐานข้อมูลออนไลน์แล้ว";
             const tableBody = document.getElementById('machine-list');
-            tableBody.innerHTML = ""; // ล้างข้อมูลเก่าออกก่อน
+            tableBody.innerHTML = ""; 
 
-            if(machines.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">ไม่มีข้อมูลเครื่องจักรในระบบ</td></tr>`;
+            if(!machines || machines.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">เชื่อมต่อสำเร็จ แต่ยังไม่มีข้อมูลในตาราง machines</td></tr>`;
                 return;
             }
 
-            // วนลูปเอาข้อมูลแต่ละแถวมาสร้างเป็นตาราง HTML
             machines.forEach(machine => {
                 const row = document.createElement('tr');
                 row.className = "hover:bg-gray-50";
@@ -136,9 +136,9 @@
             });
         }
 
-        // ระบบบันทึกข้อมูลเมื่อกดส่งฟอร์ม (Form Submission)
+        // ฟังก์ชันส่งข้อมูลจากฟอร์มไปบันทึก
         document.getElementById('add-machine-form').addEventListener('submit', async (e) => {
-            e.preventDefault(); // ป้องกันไม่ให้หน้าเว็บรีโหลดตัวเอง
+            e.preventDefault(); 
             
             const newMachine = {
                 machine_code: document.getElementById('m_code').value,
@@ -149,19 +149,18 @@
                 next_pm_date: document.getElementById('m_next_pm').value
             };
 
-            // ส่งข้อมูลไปบันทึกที่ตาราง machines บน Supabase
-            const { error } = await supabaseClient.from('machines').insert([newMachine]);
+            const { error } = await dbClient.from('machines').insert([newMachine]);
 
             if (error) {
-                alert("เกิดข้อผิดพลาดในการบันทึก: " + error.message);
+                alert("บันทึกไม่สำเร็จ: " + error.message);
             } else {
                 alert("บันทึกเครื่องจักรใหม่เรียบร้อยแล้ว!");
-                document.getElementById('add-machine-form').reset(); // ล้างฟอร์ม
-                fetchMachines(); // โหลดตารางใหม่เพื่อแสดงข้อมูลล่าสุด
+                document.getElementById('add-machine-form').reset(); 
+                fetchMachines(); 
             }
         });
 
-        // สั่งให้โหลดข้อมูลทันทีเมื่อเปิดหน้าเว็บ
+        // สั่งให้ทำงานเมื่อเปิดหน้าเว็บ
         fetchMachines();
     </script>
 </body>
