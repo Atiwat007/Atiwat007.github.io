@@ -1,167 +1,646 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบบันทึกประวัติเครื่องจักร & PM (ใช้งานจริง)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบประวัติการซ่อมเครื่องจักร (Supabase Cloud)</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --surface2: #f0efe9;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.18);
+    --text: #1a1a18; --text2: #5a5a56; --text3: #9a9a94;
+    --accent: #1a5fa8; --accent-bg: #e6f1fb;
+    --success: #0f6e56; --success-bg: #e1f5ee;
+    --warn: #854f0b; --warn-bg: #faeeda;
+    --danger: #a32d2d; --danger-bg: #fcebeb;
+    --radius: 10px; --radius-lg: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600&display=swap');
+
+  .app { max-width: 680px; margin: 0 auto; padding: 0 16px 80px; }
+  .header { padding: 20px 0 16px; border-bottom: 0.5px solid var(--border); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+  .header-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+  .card + .card { margin-top: 10px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .stat { background: var(--surface2); border-radius: var(--radius); padding: 12px 14px; }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .stat-val { font-size: 22px; font-weight: 600; }
+
+  .machine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .machine-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px; cursor: pointer; transition: border-color 0.15s; display: block; }
+  .machine-card:hover { border-color: var(--border2); }
+  .machine-card.pm-due { border-color: #e59a00; border-width: 1.5px; }
+  .machine-card.pm-overdue { border-color: var(--danger); border-width: 1.5px; }
+  .machine-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .machine-icon { font-size: 22px; }
+  .machine-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .machine-desc { font-size: 12px; color: var(--text2); }
+  .machine-date { font-size: 11px; color: var(--text3); margin-top: 8px; }
+
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; white-space: nowrap; }
+  .badge-ok { background: var(--success-bg); color: var(--success); }
+  .badge-wait { background: var(--warn-bg); color: var(--warn); }
+  .badge-fix { background: var(--danger-bg); color: var(--danger); }
+  .badge-pm { background: var(--accent-bg); color: var(--accent); }
+  .badge-due { background: #faeeda; color: #854f0b; }
+  .badge-overdue { background: var(--danger-bg); color: var(--danger); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-family: inherit; padding: 8px 16px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.1s; }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--text); color: #fff; border-color: transparent; }
+  .btn-primary:hover { background: #333; }
+  .btn-warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  .btn-sm { font-size: 12px; padding: 5px 10px; }
+
+  .section-label { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; color: var(--text2); margin-bottom: 5px; display: block; font-weight: 500; }
+  .form-control { width: 100%; padding: 9px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s; }
+  .form-control:focus { border-color: var(--accent); }
+  textarea.form-control { min-height: 75px; resize: vertical; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .history-item { border-bottom: 0.5px solid var(--border); padding: 14px 0; }
+  .history-item:last-child { border-bottom: none; }
+  .history-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .history-title { font-size: 14px; font-weight: 600; }
+  .history-meta { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+  .history-desc { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .parts-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: var(--surface2); color: var(--text2); padding: 2px 8px; border-radius: 6px; margin: 6px 4px 0 0; }
+
+  .qr-wrap { text-align: center; padding: 8px 0; }
+  .qr-wrap canvas { border-radius: 8px; }
+  .qr-label { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+  .upload-area { border: 1px dashed var(--border2); border-radius: var(--radius); padding: 20px; text-align: center; color: var(--text3); font-size: 13px; cursor: pointer; }
+  .upload-area:hover { border-color: var(--accent); color: var(--accent); }
+  .file-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .file-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text2); background: var(--surface2); padding: 4px 10px; border-radius: 6px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 0.5px solid var(--border); }
+  .tab { padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: color 0.15s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .spec-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .spec-table td { padding: 5px 0; vertical-align: top; }
+  .spec-table td:first-child { color: var(--text3); width: 40%; }
+
+  .back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .back-row h2 { font-size: 18px; font-weight: 600; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  .pm-alert-banner { border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 12px; }
+  .pm-alert-banner.overdue { background: var(--danger-bg); border: 0.5px solid #f09595; }
+  .pm-alert-banner.due { background: var(--warn-bg); border: 0.5px solid #fac775; }
+  .pm-alert-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .pm-alert-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .pm-alert-desc { font-size: 12px; color: var(--text2); }
+  .pm-alert-banner.overdue .pm-alert-title { color: var(--danger); }
+  .pm-alert-banner.due .pm-alert-title { color: var(--warn); }
+
+  .pm-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+  .pm-row:last-child { border-bottom: none; }
+  .pm-row-label { font-size: 13px; color: var(--text2); }
+  .pm-row-val { font-size: 13px; font-weight: 600; }
+
+  .notif-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--border); }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .notif-dot.red { background: var(--danger); }
+  .notif-dot.orange { background: #e59a00; }
+  .notif-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .notif-desc { font-size: 12px; color: var(--text2); }
+
+  @media (max-width: 480px) {
+    .form-row { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
 </head>
-<body class="bg-gray-100 font-sans antialiased">
+<body>
+<div class="app" id="app">กำลังโหลดข้อมูล...</div>
+<div class="toast" id="toast"></div>
 
-    <nav class="bg-blue-600 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-gears text-2xl"></i>
-                <span class="font-bold text-xl">MachineCare Online</span>
-            </div>
-            <div class="text-sm bg-blue-700 px-3 py-1 rounded-full" id="db-status">
-                กำลังเชื่อมต่อฐานข้อมูล...
-            </div>
-        </div>
-    </nav>
+<script>
+// ==================== SUPABASE CONFIGURATION ====================
+const SUPABASE_URL = "https://your-project-id.supabase.co"; // เปลี่ยนเป็นของคุณ
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // เปลี่ยนเป็นของคุณ
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    <div class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-gray-800 flex items-center">
-                        <i class="fa-solid fa-industry text-blue-500 mr-2"></i> ทะเบียนเครื่องจักร (ข้อมูลจริง)
-                    </h2>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-gray-50 text-gray-600 text-sm border-b">
-                                <th class="p-3">รหัส / ชื่อ</th>
-                                <th class="p-3">ยี่ห้อ/รุ่น</th>
-                                <th class="p-3">สถานะ</th>
-                                <th class="p-3">รอบ PM ถัดไป</th>
-                            </tr>
-                        </thead>
-                        <tbody id="machine-list" class="text-sm text-gray-700 divide-y">
-                            <tr>
-                                <td colspan="4" class="p-4 text-center text-gray-500">กำลังโหลดข้อมูล...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+// ==================== GLOBAL STATE ====================
+let DB = { groups: [], machines: [], repairs: [] };
+let currentView = "list"; 
+let selectedMachine = null;
+let activeTab = "history";
+let pendingFiles = [];
 
-        <div class="space-y-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fa-solid fa-plus text-green-500 mr-2"></i> เพิ่มเครื่องจักรใหม่ เข้าคลัง
-                </h2>
-                <form id="add-machine-form" class="space-y-4 text-sm">
-                    <div>
-                        <label class="block text-gray-600 font-medium mb-1">รหัสเครื่องจักร</label>
-                        <input type="text" id="m_code" class="w-full p-2 border rounded-lg bg-gray-50" placeholder="เช่น MC-001" required>
-                    </div>
-                    <div>
-                        <label class="block text-gray-600 font-medium mb-1">ชื่อเครื่องจักร</label>
-                        <input type="text" id="m_name" class="w-full p-2 border rounded-lg bg-gray-50" placeholder="เช่น เครื่องปั๊ม" required>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-gray-600 font-medium mb-1">ยี่ห้อ</label>
-                            <input type="text" id="m_brand" class="w-full p-2 border rounded-lg bg-gray-50" placeholder="เช่น Mitsubishi">
-                        </div>
-                        <div>
-                            <label class="block text-gray-600 font-medium mb-1">รุ่น</label>
-                            <input type="text" id="m_model" class="w-full p-2 border rounded-lg bg-gray-50" placeholder="เช่น X-2026">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-gray-600 font-medium mb-1">วัน PM รอบถัดไป</label>
-                        <input type="date" id="m_next_pm" class="w-full p-2 border rounded-lg bg-gray-50" required>
-                    </div>
-                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold p-2.5 rounded-lg transition shadow-md">
-                        <i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกลงฐานข้อมูลข้อมูลจริง
-                    </button>
-                </form>
-            </div>
-        </div>
+// ==================== DATA LOADER FROM CLOUD ====================
+async function loadData() {
+  try {
+    const [groupsRes, machinesRes, repairsRes] = await Promise.all([
+      supabase.from('groups').select('*'),
+      supabase.from('machines').select('*').order('id', { ascending: true }),
+      supabase.from('repairs').select('*').order('date', { ascending: false })
+    ]);
 
+    if (groupsRes.error) throw groupsRes.error;
+    if (machinesRes.error) throw machinesRes.error;
+    if (repairsRes.error) throw repairsRes.error;
+
+    DB.groups = groupsRes.data;
+    DB.machines = machinesRes.data.map(m => ({
+      id: m.id, name: m.name, desc: m.desc_text, icon: m.icon, group: m.group_id,
+      location: m.location, brand: m.brand, model: m.model, year: m.year, power: m.power, serial: m.serial,
+      pm: { intervalDays: m.pm_interval_days, lastPmDate: m.pm_last_date, note: m.pm_note }
+    }));
+    DB.repairs = repairsRes.data.map(r => ({
+      id: r.id, machineId: r.machine_id, date: r.date, type: r.type, tech: r.tech,
+      symptom: r.symptom, fix: r.fix, parts: r.parts, status: r.status, files: r.files || []
+    }));
+
+    updateUI(); 
+  } catch (error) {
+    console.error("Error fetching Supabase data:", error.message);
+    showToast("⚠️ โหลดข้อมูลจาก Cloud ล้มเหลว");
+  }
+}
+
+// ==================== OPERATION FUNCTIONS ====================
+async function savePmSettings(machineId) {
+  const interval = parseInt(document.getElementById("pm-interval").value);
+  const lastDate = document.getElementById("pm-last-date").value || null;
+  const note = document.getElementById("pm-note").value;
+
+  try {
+    const { error } = await supabase
+      .from('machines')
+      .update({ pm_interval_days: interval, pm_last_date: lastDate, pm_note: note })
+      .eq('id', machineId);
+
+    if (error) throw error;
+
+    showToast("💾 บันทึกการตั้งค่า PM สำเร็จ");
+    await loadData();
+    navigate('notifications', null);
+  } catch (error) {
+    alert("เกิดข้อผิดพลาด: " + error.message);
+  }
+}
+
+async function submitRepairForm() {
+  const machineId = document.getElementById("f-machine").value;
+  const date = document.getElementById("f-date").value;
+  const type = document.getElementById("f-type").value;
+  const tech = document.getElementById("f-tech").value;
+  const symptom = document.getElementById("f-symptom").value;
+  const fix = document.getElementById("f-fix").value;
+  const parts = document.getElementById("f-parts").value;
+  const status = document.getElementById("f-status").value;
+  const updatePmCheckbox = document.getElementById("f-update-pm");
+
+  if (!tech.trim() || !symptom.trim()) {
+    showToast("❌ กรุณากรอกช่องข้อมูลที่จำเป็น (*) ให้ครบถ้วน");
+    return;
+  }
+
+  try {
+    const { error: repairError } = await supabase
+      .from('repairs')
+      .insert([{ machine_id: machineId, date, type, tech, symptom, fix, parts, status, files: [] }]);
+
+    if (repairError) throw repairError;
+
+    if (type === "PM" && updatePmCheckbox && updatePmCheckbox.checked) {
+      await supabase
+        .from('machines')
+        .update({ pm_last_date: date })
+        .eq('id', machineId);
+    }
+
+    showToast("✅ บันทึกประวัติการทำงานสำเร็จ");
+    await loadData();
+    navigate('machine', machineId);
+  } catch (error) {
+    alert("บันทึกข้อมูลล้มเหลว: " + error.message);
+  }
+}
+
+function handleFiles(input) {
+  pendingFiles = Array.from(input.files);
+  const list = document.getElementById("file-list");
+  list.innerHTML = pendingFiles.map(f => `<div class="file-item"><span>📄 ${f.name}</span></div>`).join("");
+}
+
+function togglePmUpdate(type) {
+  const row = document.getElementById("pm-update-row");
+  if(row) row.style.display = (type === "PM") ? "block" : "none";
+}
+
+// ==================== PM UTILS ====================
+function getPmStatus(m) {
+  if (!m.pm || !m.pm.lastPmDate) return null;
+  const last = new Date(m.pm.lastPmDate);
+  const next = new Date(last);
+  next.setDate(next.getDate() + m.pm.intervalDays);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const daysLeft = Math.ceil((next - today) / (1000*60*60*24));
+  return { nextDate: next, daysLeft, overdue: daysLeft < 0, dueSoon: daysLeft >= 0 && daysLeft <= 7 };
+}
+
+function pmStatusBadge(m) {
+  const s = getPmStatus(m);
+  if (!s) return "";
+  if (s.overdue) return `<span class="badge badge-overdue">PM เกินกำหนด ${Math.abs(s.daysLeft)} วัน</span>`;
+  if (s.dueSoon) return `<span class="badge badge-due">PM อีก ${s.daysLeft} วัน</span>`;
+  return `<span class="badge badge-ok">PM อีก ${s.daysLeft} วัน</span>`;
+}
+
+function getAllAlerts() {
+  const alerts = [];
+  DB.machines.forEach(m => {
+    const s = getPmStatus(m);
+    if (!s) return;
+    if (s.overdue || s.dueSoon) alerts.push({ machine: m, status: s });
+  });
+  alerts.sort((a,b) => a.status.daysLeft - b.status.daysLeft);
+  return alerts;
+}
+
+// ==================== GENERAL UTILS ====================
+function formatDate(d) {
+  if (!d) return "-";
+  const dt = new Date(d);
+  return dt.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function statusBadge(s) {
+  const map = {
+    ok: ["badge-ok","ปกติ"], wait: ["badge-wait","รอดำเนินการ"],
+    fix: ["badge-fix","กำลังซ่อม"], done: ["badge-ok","เสร็จแล้ว"], PM: ["badge-pm","PM"]
+  };
+  const [cls, label] = map[s] || ["badge-pm", s];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function machineStatus(m) {
+  const repairs = DB.repairs.filter(r => r.machineId === m.id);
+  return repairs.some(r => r.status === "wait") ? "wait" : "ok";
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+function copyLink(url) {
+  navigator.clipboard.writeText(url);
+  showToast("🔗 คัดลอกลิงก์เรียบร้อยแล้ว");
+}
+
+function downloadQR(id) {
+  const canvas = document.getElementById('qr-canvas');
+  if (!canvas) return;
+  const link = document.createElement('a');
+  link.download = `QR-${id}.png`;
+  link.href = canvas.toDataURL();
+  link.click();
+}
+
+// ==================== VIEWS RENDERING ====================
+function renderList() {
+  const total = DB.machines.length;
+  const currentYearMonth = new Date().toISOString().substring(0,7); // ดึงค่าปี-เดือน ปัจจุบันอัตโนมัติ
+  const thisMonth = DB.repairs.filter(r => r.date && r.date.startsWith(currentYearMonth)).length;
+  const pendingRepair = DB.repairs.filter(r => r.status === "wait").length;
+  const alerts = getAllAlerts();
+  const alertCount = alerts.length;
+
+  return `
+    <div class="header">
+      <div>
+        <div class="header-title">ระบบจัดการ</div>
+        <h1>ประวัติการซ่อมเครื่องจักร</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-sm" onclick="navigate('notifications',null)" style="position:relative;">
+          🔔 แจ้งเตือน
+          ${alertCount > 0 ? `<span style="position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:10px;font-weight:600;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${alertCount}</span>` : ""}
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="navigate('add',null)">+ บันทึกการซ่อม</button>
+      </div>
     </div>
 
-    <script>
-        // ⚠️ เปลี่ยนข้อมูล 2 บรรทัดนี้ให้เป็นของโปรเจกต์คุณครับ
-        const SUPABASE_URL = "https://xypzufiofqpvsjinhldv.supabase.co"; 
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cHp1ZmlvZnFwdnNqaW5obGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NDY1NzUsImV4cCI6MjA5NTUyMjU3NX0.DHu2lFQq37bgb6Mjb_TD2vibNaOdDNZNV2HsDRJhQJw";
-        
-        // แก้ไขปัญหารหัสซ้ำโดยเปลี่ยนชื่อตัวแปรระบบเป็น dbClient
-        const dbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">เครื่องจักร</div>
+        <div class="stat-val">${total}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">ซ่อมเดือนนี้</div>
+        <div class="stat-val">${thisMonth}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" style="color:var(--warn)">รอดำเนินการ</div>
+        <div class="stat-val" style="color:var(--warn)">${pendingRepair}</div>
+      </div>
+      <div class="stat" style="cursor:pointer;" onclick="navigate('notifications',null)">
+        <div class="stat-label" style="color:${alertCount>0?'var(--danger)':'var(--text3)'}">แจ้งเตือน PM</div>
+        <div class="stat-val" style="color:${alertCount>0?'var(--danger)':'var(--text)'}">${alertCount}</div>
+      </div>
+    </div>
 
-        // ฟังก์ชันดึงข้อมูลจากฐานข้อมูล
-        async function fetchMachines() {
-            document.getElementById('db-status').innerText = "กำลังดึงข้อมูล...";
-            
-            // ดึงข้อมูลจากตาราง machines
-            let { data: machines, error } = await dbClient.from('machines').select('*');
-            
-            if (error) {
-                console.error("ดึงข้อมูลไม่สำเร็จ:", error);
-                document.getElementById('db-status').innerText = "🔴 ดึงข้อมูลผิดพลาด (เช็คชื่อตารางหรือ RLS)";
-                return;
-            }
+    ${alertCount > 0 ? `
+      <div style="margin-bottom:20px;">
+        ${alerts.slice(0,3).map(a => `
+          <div class="pm-alert-banner ${a.status.overdue?'overdue':'due'}" style="cursor:pointer;" onclick="navigate('machine','${a.machine.id}')">
+            <div class="pm-alert-icon">${a.status.overdue ? '🚨' : '⚠️'}</div>
+            <div>
+              <div class="pm-alert-title">${a.status.overdue ? `PM เกินกำหนด ${Math.abs(a.status.daysLeft)} วัน` : `PM ครบกำหนดใน ${a.status.daysLeft} วัน`}</div>
+              <div class="pm-alert-desc">${a.machine.name} · ${a.machine.desc} · กำหนด ${formatDate(a.status.nextDate)}</div>
+            </div>
+          </div>
+        `).join("")}
+        ${alertCount > 3 ? `<p style="font-size:12px;color:var(--text3);text-align:center;margin-top:6px;">และอีก ${alertCount-3} รายการ — <span style="color:var(--accent);cursor:pointer;" onclick="navigate('notifications',null)">ดูทั้งหมด</span></p>` : ""}
+      </div>
+    ` : ""}
 
-            document.getElementById('db-status').innerText = "🟢 เชื่อมต่อฐานข้อมูลออนไลน์แล้ว";
-            const tableBody = document.getElementById('machine-list');
-            tableBody.innerHTML = ""; 
+    ${DB.groups.map(g => {
+      const gMachines = DB.machines.filter(m => m.group === g.id);
+      return `<div style="margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div class="section-label" style="margin-bottom:0;">${g.name}</div>
+          <div style="flex:1;height:0.5px;background:var(--border);"></div>
+          <span style="font-size:11px;color:var(--text3);">${gMachines.length} เครื่อง</span>
+        </div>
+        <div class="machine-grid">
+          ${gMachines.map(m => {
+            const st = machineStatus(m);
+            const ps = getPmStatus(m);
+            const cardClass = ps ? (ps.overdue ? "pm-overdue" : ps.dueSoon ? "pm-due" : "") : "";
+            return `<div class="machine-card ${cardClass}" onclick="navigate('machine','${m.id}')">
+              <div class="machine-card-top"><span class="machine-icon">${m.icon}</span>${statusBadge(st)}</div>
+              <div class="machine-name">${m.name}</div>
+              <div class="machine-desc">${m.desc}</div>
+              ${ps ? `<div style="margin-top:6px;">${pmStatusBadge(m)}</div>` : ""}
+              <div class="machine-date">📍 ${m.location}</div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("")}
+  `;
+}
 
-            if(!machines || machines.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">เชื่อมต่อสำเร็จ แต่ยังไม่มีข้อมูลในตาราง machines</td></tr>`;
-                return;
-            }
+function renderNotifications() {
+  const alerts = getAllAlerts();
+  return `
+    <div class="back-row">
+      <button class="btn btn-sm" onclick="navigate('list',null)">← กลับ</button>
+      <h2>การแจ้งเตือน PM</h2>
+    </div>
 
-            machines.forEach(machine => {
-                const row = document.createElement('tr');
-                row.className = "hover:bg-gray-50";
-                row.innerHTML = `
-                    <td class="p-3">
-                        <div class="font-semibold text-blue-600">${machine.machine_code}</div>
-                        <div class="text-xs text-gray-500">${machine.name}</div>
-                    </td>
-                    <td class="p-3">${machine.brand || '-'} / ${machine.model || '-'}</td>
-                    <td class="p-3"><span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">${machine.status || 'พร้อมใช้งาน'}</span></td>
-                    <td class="p-3 font-medium text-gray-700">${machine.next_pm_date}</td>
-                `;
-                tableBody.appendChild(row);
-            });
+    ${alerts.length === 0 ? `
+      <div class="card" style="text-align:center;padding:40px;">
+        <div style="font-size:36px;margin-bottom:12px;">✅</div>
+        <p style="font-weight:600;margin-bottom:4px;">เครื่องจักรทุกตัวอยู่ในเกณฑ์ปกติ</p>
+        <p style="font-size:13px;color:var(--text3);">ไม่มีเครื่องที่ต้องทำ PM ในขณะนี้</p>
+      </div>
+    ` : `
+      <div class="card">
+        ${alerts.map(a => `
+          <div class="notif-item">
+            <div class="notif-dot ${a.status.overdue?'red':'orange'}"></div>
+            <div style="flex:1;">
+              <div class="notif-title">${a.machine.name}</div>
+              <div class="notif-desc">
+                ${a.status.overdue
+                  ? `<span style="color:var(--danger);font-weight:600;">เกินกำหนด ${Math.abs(a.status.daysLeft)} วัน</span>`
+                  : `<span style="color:var(--warn);font-weight:600;">ครบกำหนดใน ${a.status.daysLeft} วัน</span>`}
+                · กำหนด PM: ${formatDate(a.status.nextDate)}<br>
+                ทำ PM ล่าสุด: ${formatDate(a.machine.pm.lastPmDate)} · รอบ: ทุก ${a.machine.pm.intervalDays} วัน
+              </div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-primary" onclick="navigate('add','${a.machine.id}')">+ บันทึก PM</button>
+                <button class="btn btn-sm" onclick="navigate('machine','${a.machine.id}')">ดูเครื่อง</button>
+              </div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `}
+
+    <div style="margin-top:16px;">
+      <p class="section-label">เครื่องจักรทั้งหมด</p>
+      <div class="card">
+        ${DB.machines.map(m => {
+          return `<div class="pm-row">
+            <div>
+              <div style="font-size:13px;font-weight:600;">${m.name}</div>
+              <div style="font-size:11px;color:var(--text3);">รอบ: ทุก ${m.pm.intervalDays} วัน · ทำล่าสุด: ${formatDate(m.pm.lastPmDate)}</div>
+            </div>
+            <div style="text-align:right;">
+              ${pmStatusBadge(m)}
+              <button class="btn btn-sm" style="margin-top:4px;" onclick="navigate('pm-settings','${m.id}')">⚙ ตั้งค่า</button>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderPmSettings(machineId) {
+  const m = DB.machines.find(x => x.id === machineId);
+  if (!m) return "";
+  const ps = getPmStatus(m);
+  return `
+    <div class="back-row">
+      <button class="btn btn-sm" onclick="navigate('notifications',null)">← กลับ</button>
+      <h2>ตั้งค่า PM – ${m.name}</h2>
+    </div>
+
+    ${ps ? `<div class="pm-alert-banner ${ps.overdue?'overdue':'due'}" style="margin-bottom:16px;">
+      <div class="pm-alert-icon">${ps.overdue?'🚨':'⚠️'}</div>
+      <div>
+        <div class="pm-alert-title">${ps.overdue ? `เกินกำหนด ${Math.abs(ps.daysLeft)} วัน` : `ครบกำหนดใน ${ps.daysLeft} วัน`}</div>
+        <div class="pm-alert-desc">กำหนด PM: ${formatDate(ps.nextDate)}</div>
+      </div>
+    </div>` : ""}
+
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">รอบการทำ PM (วัน)</label>
+        <select class="form-control" id="pm-interval">
+          ${[7,14,30,60,90,180,365].map(d =>
+            `<option value="${d}" ${m.pm.intervalDays===d?'selected':''}>${d} วัน ${d===30?'(1 เดือน)':d===90?'(3 เดือน)':d===180?'(6 เดือน)':d===365?'(1 ปี)':''}</option>`
+          ).join("")}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">วันที่ทำ PM ล่าสุด</label>
+        <input type="date" class="form-control" id="pm-last-date" value="${m.pm.lastPmDate || ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">รายการงาน PM (checklist)</label>
+        <textarea class="form-control" id="pm-note" placeholder="รายการงานที่ต้องทำเมื่อถึง PM...">${m.pm.note || ''}</textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="savePmSettings('${machineId}')">
+        ✓ บันทึกการตั้งค่า PM
+      </button>
+    </div>
+  `;
+}
+
+function renderMachine(machineId) {
+  const m = DB.machines.find(x => x.id === machineId);
+  if (!m) return "<p>ไม่พบเครื่องจักร</p>";
+  const repairs = DB.repairs.filter(r => r.machineId === machineId);
+  const st = machineStatus(m);
+  const ps = getPmStatus(m);
+  const pageUrl = `${location.origin}${location.pathname}?m=${machineId}`;
+
+  return `
+    <div class="back-row">
+      <button class="btn btn-sm" onclick="navigate('list',null)">← กลับ</button>
+      <h2>${m.name}</h2>
+      ${statusBadge(st)}
+    </div>
+
+    ${ps && (ps.overdue || ps.dueSoon) ? `
+      <div class="pm-alert-banner ${ps.overdue?'overdue':'due'}" style="margin-bottom:16px;cursor:pointer;" onclick="navigate('pm-settings','${m.id}')">
+        <div class="pm-alert-icon">${ps.overdue?'🚨':'⚠️'}</div>
+        <div style="flex:1;">
+          <div class="pm-alert-title">${ps.overdue ? `PM เกินกำหนด ${Math.abs(ps.daysLeft)} วัน` : `PM ครบกำหนดใน ${ps.daysLeft} วัน`}</div>
+          <div class="pm-alert-desc">กำหนด: ${formatDate(ps.nextDate)} · รอบทุก ${m.pm.intervalDays} วัน</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();navigate('add','${m.id}')">+ บันทึก PM</button>
+      </div>
+    ` : ""}
+
+    <div class="tabs">
+      <div class="tab ${activeTab==='history'?'active':''}" onclick="setTab('history')">ประวัติการซ่อม</div>
+      <div class="tab ${activeTab==='pm'?'active':''}" onclick="setTab('pm')">แผน PM</div>
+      <div class="tab ${activeTab==='spec'?'active':''}" onclick="setTab('spec')">ข้อมูลเครื่อง</div>
+      <div class="tab ${activeTab==='qr'?'active':''}" onclick="setTab('qr')">QR Code</div>
+    </div>
+
+    ${activeTab === 'history' ? `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" onclick="navigate('add','${machineId}')">+ บันทึกการซ่อมใหม่</button>
+      </div>
+      <div class="card">
+        ${repairs.length === 0
+          ? `<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px 0;">ยังไม่มีประวัติการซ่อม</p>`
+          : repairs.map(r => `
+            <div class="history-item">
+              <div class="history-top">
+                <div class="history-title">${r.symptom.substring(0,40)}${r.symptom.length>40?'...':''}</div>
+                ${statusBadge(r.status==="done"?"done":r.type==="PM"?"PM":"wait")}
+              </div>
+              <div class="history-meta">${formatDate(r.date)} · ${r.tech} · ${r.type}</div>
+              <div class="history-desc">
+                <strong style="color:var(--text);font-size:12px;">อาการ:</strong> ${r.symptom}<br>
+                <strong style="color:var(--text);font-size:12px;">การแก้ไข:</strong> ${r.fix || '-'}
+              </div>
+              ${r.parts ? `<span class="parts-tag">🔩 ${r.parts}</span>` : ""}
+            </div>
+          `).join("")
         }
+      </div>
+    ` : ""}
 
-        // ฟังก์ชันส่งข้อมูลจากฟอร์มไปบันทึก
-        document.getElementById('add-machine-form').addEventListener('submit', async (e) => {
-            e.preventDefault(); 
-            
-            const newMachine = {
-                machine_code: document.getElementById('m_code').value,
-                name: document.getElementById('m_name').value,
-                brand: document.getElementById('m_brand').value,
-                model: document.getElementById('m_model').value,
-                status: "พร้อมใช้งาน",
-                next_pm_date: document.getElementById('m_next_pm').value
-            };
+    ${activeTab === 'pm' ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="pm-row">
+          <span class="pm-row-label">รอบการทำ PM</span>
+          <span class="pm-row-val">ทุก ${m.pm.intervalDays} วัน</span>
+        </div>
+        <div class="pm-row">
+          <span class="pm-row-label">ทำ PM ล่าสุด</span>
+          <span class="pm-row-val">${formatDate(m.pm.lastPmDate)}</span>
+        </div>
+        <div class="pm-row">
+          <span class="pm-row-label">กำหนด PM ครั้งถัดไป</span>
+          <span class="pm-row-val" style="color:${ps&&ps.overdue?'var(--danger)':ps&&ps.dueSoon?'var(--warn)':'var(--text)'}">
+            ${ps ? formatDate(ps.nextDate) : "-"}
+          </span>
+        </div>
+      </div>
+      ${m.pm.note ? `
+        <p class="section-label">รายการงาน PM</p>
+        <div class="card">
+          ${m.pm.note.split('\n').filter(l=>l.trim()).map(l=>`
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);">
+              <input type="checkbox" style="margin-top:3px;flex-shrink:0;">
+              <span style="font-size:13px;">${l}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+    ` : ""}
 
-            const { error } = await dbClient.from('machines').insert([newMachine]);
+    ${activeTab === 'spec' ? `
+      <div class="card">
+        <table class="spec-table">
+          <tr><td>ชื่อเครื่อง</td><td>${m.name} – ${m.desc}</td></tr>
+          <tr><td>ยี่ห้อ / รุ่น</td><td>${m.brand} ${m.model}</td></tr>
+          <tr><td>ปีที่ผลิต</td><td>${m.year}</td></tr>
+          <tr><td>กำลังไฟฟ้า</td><td>${m.power}</td></tr>
+          <tr><td>ตำแหน่งติดตั้ง</td><td>${m.location}</td></tr>
+          <tr><td>Serial No.</td><td>${m.serial}</td></tr>
+        </table>
+      </div>
+    ` : ""}
 
-            if (error) {
-                alert("บันทึกไม่สำเร็จ: " + error.message);
-            } else {
-                alert("บันทึกเครื่องจักรใหม่เรียบร้อยแล้ว!");
-                document.getElementById('add-machine-form').reset(); 
-                fetchMachines(); 
-            }
-        });
+    ${activeTab === 'qr' ? `
+      <div class="card" style="text-align:center;">
+        <div class="qr-wrap">
+          <canvas id="qr-canvas"></canvas>
+          <div class="qr-label">${pageUrl}</div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;">
+          <button class="btn btn-sm" onclick="downloadQR('${m.id}')">⬇ ดาวน์โหลด QR</button>
+          <button class="btn btn-sm" onclick="copyLink('${pageUrl}')">🔗 คัดลอกลิงก์</button>
+        </div>
+      </div>
+    ` : ""}
+  `;
+}
 
-        // สั่งให้ทำงานเมื่อเปิดหน้าเว็บ
-        fetchMachines();
-    </script>
-</body>
-</html>
+function renderAdd(machineId) {
+  const today = new Date().toISOString().split("T")[0];
+  const opts = DB.machines.map(m => `<option value="${m.id}" ${m.id===machineId?'selected':''}>${m.name} – ${m.desc}</option>`).join("");
+  return `
+    <div class="back-row">
+      <button class="btn btn-sm" onclick="navigate(${machineId?`'machine','${machineId}'`:"'list',null"})">← กลับ</button>
+      <h2>บันทึกการซ่อม / PM</h2>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">เครื่องจักร *</label>
+        <select class="form-control" id="f-machine">${opts}</select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">วันที่ *</label>
+          <input type="date" class="form-control" id="f-date" value="${today}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ประเภทงาน *</label>
+          <select class="form-control" id="f-type" onchange="togglePmUpdate(this.value)">
+            <option>ฉุกเฉิน</option>
